@@ -9,7 +9,9 @@ describe("SampleItem", () => {
     name: "kick-drum.wav",
     duration: 2.5,
     isLoading: false,
+    isPreviewing: false,
     error: null,
+    onPreview: vi.fn(),
     onRemove: vi.fn(),
   };
 
@@ -43,15 +45,73 @@ describe("SampleItem", () => {
   it("shows [ERR] and an alert role when there is an error", () => {
     render(<SampleItem {...defaultProps} error="DECODE FAILED" />);
     expect(screen.queryByText("0:02.5")).not.toBeInTheDocument();
-    expect(screen.getByRole("alert", { name: /decode failed/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("alert", { name: /decode failed/i }),
+    ).toBeInTheDocument();
     expect(screen.getByText("[ERR]")).toBeInTheDocument();
   });
 
   it("does not show error when loading (loading takes precedence)", () => {
-    render(<SampleItem {...defaultProps} isLoading={true} error="DECODE FAILED" />);
+    render(
+      <SampleItem {...defaultProps} isLoading={true} error="DECODE FAILED" />,
+    );
     expect(screen.getByText("[LOADING]")).toBeInTheDocument();
     expect(screen.queryByText("[ERR]")).not.toBeInTheDocument();
   });
+
+  // --- Preview button ---
+
+  it("renders the preview button with [▶] when not previewing", () => {
+    render(<SampleItem {...defaultProps} />);
+    expect(
+      screen.getByRole("button", { name: /preview kick-drum\.wav/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("[▶]")).toBeInTheDocument();
+  });
+
+  it("renders [■] and stop label when isPreviewing is true", () => {
+    render(<SampleItem {...defaultProps} isPreviewing={true} />);
+    expect(
+      screen.getByRole("button", { name: /stop preview kick-drum\.wav/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("[■]")).toBeInTheDocument();
+  });
+
+  it("calls onPreview when preview button is clicked", async () => {
+    const onPreview = vi.fn();
+    render(<SampleItem {...defaultProps} onPreview={onPreview} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /preview kick-drum\.wav/i }),
+    );
+    expect(onPreview).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onPreview when isPreviewing to act as stop/toggle", async () => {
+    const onPreview = vi.fn();
+    render(
+      <SampleItem {...defaultProps} isPreviewing={true} onPreview={onPreview} />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /stop preview kick-drum\.wav/i }),
+    );
+    expect(onPreview).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the preview button while loading", () => {
+    render(<SampleItem {...defaultProps} isLoading={true} />);
+    expect(
+      screen.getByRole("button", { name: /preview kick-drum\.wav/i }),
+    ).toBeDisabled();
+  });
+
+  it("disables the preview button when in error state", () => {
+    render(<SampleItem {...defaultProps} error="DECODE FAILED" />);
+    expect(
+      screen.getByRole("button", { name: /preview kick-drum\.wav/i }),
+    ).toBeDisabled();
+  });
+
+  // --- Remove button ---
 
   it("calls onRemove when the remove button is clicked", async () => {
     const onRemove = vi.fn();
@@ -76,7 +136,11 @@ describe("SampleItem", () => {
   it("remove button is accessible when in error state", async () => {
     const onRemove = vi.fn();
     render(
-      <SampleItem {...defaultProps} error="DECODE FAILED" onRemove={onRemove} />,
+      <SampleItem
+        {...defaultProps}
+        error="DECODE FAILED"
+        onRemove={onRemove}
+      />,
     );
     await userEvent.click(
       screen.getByRole("button", { name: /remove kick-drum\.wav/i }),
@@ -88,7 +152,9 @@ describe("SampleItem", () => {
     render(
       <SampleItem {...defaultProps} name="very-long-sample-name.wav" />,
     );
-    expect(screen.getByTitle("very-long-sample-name.wav")).toBeInTheDocument();
+    expect(
+      screen.getByTitle("very-long-sample-name.wav"),
+    ).toBeInTheDocument();
   });
 
   it("renders the terminal prompt character", () => {

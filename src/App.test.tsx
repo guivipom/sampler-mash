@@ -13,12 +13,12 @@ const { mockDecodeAudioData } = vi.hoisted(() => ({
 vi.mock("tone", () => ({
   start: vi.fn().mockResolvedValue(undefined),
   getContext: () => ({ decodeAudioData: mockDecodeAudioData }),
-  Player: vi.fn().mockImplementation(() => ({
-    toDestination: vi.fn().mockReturnThis(),
-    start: vi.fn().mockReturnThis(),
-    stop: vi.fn(),
-    dispose: vi.fn(),
-  })),
+  Player: function MockPlayer(this: Record<string, unknown>) {
+    this.toDestination = function (this: unknown) { return this; };
+    this.start = function (this: unknown) { return this; };
+    this.stop = vi.fn();
+    this.dispose = vi.fn();
+  },
 }));
 
 function makeMockAudioBuffer(duration: number = 1.0): AudioBuffer {
@@ -156,6 +156,41 @@ describe("App", () => {
 
     expect(screen.queryByText("removable.wav")).not.toBeInTheDocument();
     expect(screen.getByText(/no samples loaded/i)).toBeInTheDocument();
+  });
+
+  it("shows the preview button for a loaded sample", async () => {
+    render(<App />);
+
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, [makeAudioFile("kick.wav")]);
+    });
+
+    await screen.findByText("kick.wav");
+    expect(
+      screen.getByRole("button", { name: /preview kick\.wav/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("preview button toggles to stop label when clicked", async () => {
+    render(<App />);
+
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, [makeAudioFile("bass.wav")]);
+    });
+
+    await screen.findByText("bass.wav");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /preview bass\.wav/i }),
+    );
+
+    await screen.findByRole("button", { name: /stop preview bass\.wav/i });
   });
 
   it("shows [ERR] in the sample list when a file fails to decode", async () => {

@@ -10,10 +10,17 @@ interface SampleListEntry {
 
 interface SampleListProps {
   samples: SampleListEntry[];
+  previewingId: string | null;
+  onPreview: (id: string) => void;
   onRemove: (id: string) => void;
 }
 
-export function SampleList({ samples, onRemove }: SampleListProps) {
+export function SampleList({
+  samples,
+  previewingId,
+  onPreview,
+  onRemove,
+}: SampleListProps) {
   return (
     <div>
       {/* Section header */}
@@ -38,7 +45,9 @@ export function SampleList({ samples, onRemove }: SampleListProps) {
                 duration={sample.duration}
                 error={sample.error}
                 isLoading={sample.isLoading}
+                isPreviewing={previewingId === sample.id}
                 name={sample.name}
+                onPreview={() => onPreview(sample.id)}
                 onRemove={() => onRemove(sample.id)}
               />
             </li>

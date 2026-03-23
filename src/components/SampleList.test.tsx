@@ -14,14 +14,21 @@ const makeSample = (
   ...overrides,
 });
 
+const defaultListProps = {
+  samples: [],
+  previewingId: null,
+  onPreview: vi.fn(),
+  onRemove: vi.fn(),
+};
+
 describe("SampleList", () => {
   it("always renders the SAMPLE BANK section header", () => {
-    render(<SampleList samples={[]} onRemove={vi.fn()} />);
+    render(<SampleList {...defaultListProps} />);
     expect(screen.getByText("SAMPLE BANK")).toBeInTheDocument();
   });
 
   it("shows the empty state message when there are no samples", () => {
-    render(<SampleList samples={[]} onRemove={vi.fn()} />);
+    render(<SampleList {...defaultListProps} />);
     expect(screen.getByText(/no samples loaded/i)).toBeInTheDocument();
   });
 
@@ -31,7 +38,7 @@ describe("SampleList", () => {
       makeSample({ id: "2", name: "snare.wav" }),
       makeSample({ id: "3", name: "hihat.wav" }),
     ];
-    render(<SampleList samples={samples} onRemove={vi.fn()} />);
+    render(<SampleList {...defaultListProps} samples={samples} />);
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
     expect(screen.getByText("kick.wav")).toBeInTheDocument();
     expect(screen.getByText("snare.wav")).toBeInTheDocument();
@@ -39,7 +46,9 @@ describe("SampleList", () => {
   });
 
   it("does not show the empty state when samples are present", () => {
-    render(<SampleList samples={[makeSample()]} onRemove={vi.fn()} />);
+    render(
+      <SampleList {...defaultListProps} samples={[makeSample()]} />,
+    );
     expect(screen.queryByText(/no samples loaded/i)).not.toBeInTheDocument();
   });
 
@@ -49,10 +58,42 @@ describe("SampleList", () => {
       makeSample({ id: "2", name: "b.wav" }),
       makeSample({ id: "3", name: "c.wav" }),
     ];
-    render(<SampleList samples={samples} onRemove={vi.fn()} />);
+    render(<SampleList {...defaultListProps} samples={samples} />);
     expect(screen.getByText("001")).toBeInTheDocument();
     expect(screen.getByText("002")).toBeInTheDocument();
     expect(screen.getByText("003")).toBeInTheDocument();
+  });
+
+  it("marks the correct item as isPreviewing based on previewingId", () => {
+    const samples = [
+      makeSample({ id: "aaa", name: "playing.wav" }),
+      makeSample({ id: "bbb", name: "silent.wav" }),
+    ];
+    render(
+      <SampleList {...defaultListProps} samples={samples} previewingId="aaa" />,
+    );
+    expect(
+      screen.getByRole("button", { name: /stop preview playing\.wav/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /preview silent\.wav/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("calls onPreview with the correct sample id", async () => {
+    const onPreview = vi.fn();
+    const samples = [
+      makeSample({ id: "abc", name: "bass.wav" }),
+      makeSample({ id: "xyz", name: "lead.wav" }),
+    ];
+    render(
+      <SampleList {...defaultListProps} samples={samples} onPreview={onPreview} />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /preview bass\.wav/i }),
+    );
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    expect(onPreview).toHaveBeenCalledWith("abc");
   });
 
   it("calls onRemove with the correct sample id", async () => {
@@ -61,14 +102,14 @@ describe("SampleList", () => {
       makeSample({ id: "abc", name: "bass.wav" }),
       makeSample({ id: "xyz", name: "lead.wav" }),
     ];
-    render(<SampleList samples={samples} onRemove={onRemove} />);
-
+    render(
+      <SampleList {...defaultListProps} samples={samples} onRemove={onRemove} />,
+    );
     const items = screen.getAllByRole("listitem");
     const bassItem = items.find((item) => within(item).queryByText("bass.wav"));
     await userEvent.click(
       within(bassItem!).getByRole("button", { name: /remove bass\.wav/i }),
     );
-
     expect(onRemove).toHaveBeenCalledTimes(1);
     expect(onRemove).toHaveBeenCalledWith("abc");
   });
@@ -78,7 +119,7 @@ describe("SampleList", () => {
       makeSample({ id: "1", name: "loading.wav", isLoading: true }),
       makeSample({ id: "2", name: "ready.wav", isLoading: false }),
     ];
-    render(<SampleList samples={samples} onRemove={vi.fn()} />);
+    render(<SampleList {...defaultListProps} samples={samples} />);
     expect(screen.getByRole("status", { name: /loading/i })).toBeInTheDocument();
     expect(screen.getByText("0:01.0")).toBeInTheDocument();
   });
@@ -88,8 +129,10 @@ describe("SampleList", () => {
       makeSample({ id: "1", name: "broken.wav", error: "DECODE FAILED" }),
       makeSample({ id: "2", name: "good.wav" }),
     ];
-    render(<SampleList samples={samples} onRemove={vi.fn()} />);
-    expect(screen.getByRole("alert", { name: /decode failed/i })).toBeInTheDocument();
+    render(<SampleList {...defaultListProps} samples={samples} />);
+    expect(
+      screen.getByRole("alert", { name: /decode failed/i }),
+    ).toBeInTheDocument();
     expect(screen.getByText("0:01.0")).toBeInTheDocument();
   });
 });

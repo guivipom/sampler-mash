@@ -6,7 +6,7 @@ import { useAudioEngine } from "./hooks/useAudioEngine";
 const REJECTION_DISPLAY_MS = 5000;
 
 function App() {
-  const { samples, addFiles, removeSample } = useAudioEngine();
+  const { samples, addFiles, removeSample, previewSample, stopPreview, previewingId } = useAudioEngine();
   const [rejectionMessage, setRejectionMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -86,7 +86,14 @@ function App() {
         </div>
 
         {/* Sample bank */}
-        <SampleList samples={samples} onRemove={removeSample} />
+        <SampleList
+          samples={samples}
+          previewingId={previewingId}
+          onPreview={(id) =>
+            previewingId === id ? stopPreview() : previewSample(id)
+          }
+          onRemove={removeSample}
+        />
       </main>
     </div>
   );

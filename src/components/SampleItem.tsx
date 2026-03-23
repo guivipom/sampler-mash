@@ -5,7 +5,9 @@ interface SampleItemProps {
   name: string;
   duration: number;
   isLoading: boolean;
+  isPreviewing: boolean;
   error: string | null;
+  onPreview: () => void;
   onRemove: () => void;
 }
 
@@ -14,10 +16,13 @@ export function SampleItem({
   name,
   duration,
   isLoading,
+  isPreviewing,
   error,
+  onPreview,
   onRemove,
 }: SampleItemProps) {
   const paddedIndex = index.toString().padStart(3, "0");
+  const canPreview = !isLoading && !error;
 
   function renderStatus() {
     if (isLoading) {
@@ -50,7 +55,9 @@ export function SampleItem({
       className={`flex items-center gap-2 px-1 py-1 text-xs hover:bg-orange-950/30 ${error ? "opacity-60" : ""}`}
     >
       {/* Prompt */}
-      <span className={`shrink-0 ${error ? "text-red-800" : "text-orange-600"}`}>
+      <span
+        className={`shrink-0 ${error ? "text-red-800" : "text-orange-600"}`}
+      >
         &gt;
       </span>
 
@@ -76,10 +83,27 @@ export function SampleItem({
       {/* Status: duration / loading / error */}
       <span className="w-16 shrink-0 text-right">{renderStatus()}</span>
 
+      {/* Preview */}
+      <button
+        aria-label={isPreviewing ? `Stop preview ${name}` : `Preview ${name}`}
+        className="ml-2 shrink-0 w-8 text-center transition-colors disabled:cursor-not-allowed disabled:text-orange-900 enabled:hover:text-orange-200"
+        disabled={!canPreview}
+        onClick={onPreview}
+        type="button"
+      >
+        {isPreviewing ? (
+          <span className="animate-pulse text-orange-300">[■]</span>
+        ) : (
+          <span className={canPreview ? "text-orange-700" : "text-orange-900"}>
+            [▶]
+          </span>
+        )}
+      </button>
+
       {/* Remove */}
       <button
         aria-label={`Remove ${name}`}
-        className="ml-2 shrink-0 text-orange-800 transition-colors hover:text-red-500"
+        className="shrink-0 text-orange-800 transition-colors hover:text-red-500"
         onClick={onRemove}
         type="button"
       >
