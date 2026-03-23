@@ -18,27 +18,32 @@ describe("UploadButton", () => {
   it("renders with the correct count label", () => {
     render(<UploadButton {...defaultProps} currentCount={3} />);
     expect(
-      screen.getByRole("button", { name: /add samples, 3 of 25 used/i }),
+      screen.getByRole("button", { name: /load samples, 3 of 25 used/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Add Samples (3/25)")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /load samples, 3 of 25 used/i }),
+    ).toHaveTextContent(/LOAD SAMPLES\s+03\/25/);
   });
 
-  it("renders 0/25 when no samples are uploaded", () => {
+  it("renders 00/25 when no samples are uploaded", () => {
     render(<UploadButton {...defaultProps} currentCount={0} />);
-    expect(screen.getByText("Add Samples (0/25)")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /load samples, 0 of 25 used/i }),
+    ).toHaveTextContent(/LOAD SAMPLES\s+00\/25/);
   });
 
   it("is disabled and shows limit message when at capacity", () => {
     render(<UploadButton {...defaultProps} currentCount={25} />);
     const btn = screen.getByRole("button");
     expect(btn).toBeDisabled();
-    expect(screen.getByText("Sample limit reached (25/25)")).toBeInTheDocument();
+    expect(btn).toHaveTextContent(/LIMIT REACHED\s+25\/25/);
   });
 
   it("is enabled when one slot remains", () => {
     render(<UploadButton {...defaultProps} currentCount={24} />);
-    expect(screen.getByRole("button")).not.toBeDisabled();
-    expect(screen.getByText("Add Samples (24/25)")).toBeInTheDocument();
+    const btn = screen.getByRole("button");
+    expect(btn).not.toBeDisabled();
+    expect(btn).toHaveTextContent(/LOAD SAMPLES\s+24\/25/);
   });
 
   it("calls onFilesSelected with valid audio files", async () => {
@@ -51,7 +56,9 @@ describe("UploadButton", () => {
       />,
     );
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     const files = [
       makeAudioFile("kick.wav", "audio/wav"),
       makeAudioFile("snare.mp3", "audio/mpeg"),
@@ -72,7 +79,9 @@ describe("UploadButton", () => {
       />,
     );
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     const audioFile = makeAudioFile("kick.wav", "audio/wav");
     const imageFile = new File(["img"], "photo.jpg", { type: "image/jpeg" });
     await userEvent.upload(input, [audioFile, imageFile]);
@@ -93,7 +102,9 @@ describe("UploadButton", () => {
       />,
     );
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     await userEvent.upload(input, [
       makeAudioFile("a.wav"),
       makeAudioFile("b.wav"),
@@ -101,7 +112,7 @@ describe("UploadButton", () => {
 
     expect(onRejected).toHaveBeenCalledTimes(1);
     expect(onRejected).toHaveBeenCalledWith(
-      expect.stringContaining("Only 1 slot remaining"),
+      expect.stringContaining("ONLY 1 SLOT REMAINING"),
     );
     expect(onFilesSelected).not.toHaveBeenCalled();
   });
@@ -117,14 +128,16 @@ describe("UploadButton", () => {
       />,
     );
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     await userEvent.upload(input, [
       makeAudioFile("a.wav"),
       makeAudioFile("b.wav"),
     ]);
 
     expect(onRejected).toHaveBeenCalledWith(
-      expect.stringMatching(/1 slot remaining/),
+      expect.stringMatching(/1 SLOT REMAINING/),
     );
   });
 
@@ -140,7 +153,9 @@ describe("UploadButton", () => {
       />,
     );
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     const imageFile = new File(["img"], "photo.jpg", { type: "image/jpeg" });
     await userEvent.upload(input, [imageFile]);
 
@@ -158,7 +173,9 @@ describe("UploadButton", () => {
       />,
     );
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     const fileNoMime = new File(["audio"], "sample.ogg", { type: "" });
     await userEvent.upload(input, [fileNoMime]);
 

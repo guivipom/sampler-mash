@@ -49,8 +49,8 @@ export function UploadButton({
 
     if (validFiles.length > remaining) {
       onRejected(
-        `Cannot add ${validFiles.length} sample${validFiles.length === 1 ? "" : "s"}. ` +
-          `Only ${remaining} slot${remaining === 1 ? "" : "s"} remaining (${currentCount}/${maxCount}).`,
+        `CANNOT ADD ${validFiles.length} SAMPLE${validFiles.length === 1 ? "" : "S"}. ` +
+          `ONLY ${remaining} SLOT${remaining === 1 ? "" : "S"} REMAINING (${currentCount}/${maxCount}).`,
       );
     } else if (validFiles.length > 0) {
       onFilesSelected(validFiles);
@@ -75,17 +75,17 @@ export function UploadButton({
       <button
         aria-label={
           atCapacity
-            ? `Sample limit reached (${maxCount}/${maxCount})`
-            : `Add samples, ${currentCount} of ${maxCount} used`
+            ? `Sample limit reached ${maxCount} of ${maxCount}`
+            : `Load samples, ${currentCount} of ${maxCount} used`
         }
-        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+        className="border border-orange-700 bg-black px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-orange-400 transition-colors hover:border-orange-500 hover:bg-orange-950 hover:text-orange-300 disabled:cursor-not-allowed disabled:border-orange-900 disabled:text-orange-800"
         disabled={atCapacity}
         onClick={handleButtonClick}
         type="button"
       >
         {atCapacity
-          ? `Sample limit reached (${maxCount}/${maxCount})`
-          : `Add Samples (${currentCount}/${maxCount})`}
+          ? `[ LIMIT REACHED  ${maxCount}/${maxCount} ]`
+          : `[ LOAD SAMPLES  ${currentCount.toString().padStart(2, "0")}/${maxCount} ]`}
       </button>
     </>
   );

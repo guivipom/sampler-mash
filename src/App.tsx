@@ -11,7 +11,10 @@ function App() {
 
   useEffect(() => {
     if (!rejectionMessage) return;
-    const timer = setTimeout(() => setRejectionMessage(null), REJECTION_DISPLAY_MS);
+    const timer = setTimeout(
+      () => setRejectionMessage(null),
+      REJECTION_DISPLAY_MS,
+    );
     return () => clearTimeout(timer);
   }, [rejectionMessage]);
 
@@ -20,42 +23,69 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      <header className="border-b border-gray-800 px-6 py-4">
-        <h1 className="text-2xl font-bold tracking-tight">Sampler App</h1>
+    <div className="min-h-screen bg-black font-mono text-orange-400">
+      {/* Header */}
+      <header className="border-b border-orange-900 px-6 py-4">
+        <div className="mx-auto max-w-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-bold uppercase tracking-widest text-orange-300">
+                SAMPLER // MASH SYSTEM
+              </h1>
+              <p className="mt-0.5 text-xs uppercase tracking-widest text-orange-800">
+                NERV AUDIO DIVISION — v0.1.0
+              </p>
+            </div>
+            <div className="text-right text-xs uppercase tracking-widest text-orange-800">
+              <div>STATUS: <span className="text-orange-500">ONLINE</span></div>
+              <div>
+                BANK:{" "}
+                <span className="text-orange-400">
+                  {samples.length.toString().padStart(2, "0")}/{MAX_SAMPLES}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </header>
 
       <main className="mx-auto max-w-2xl p-6">
-        <div className="flex items-center justify-between mb-6">
+        {/* Warning alert */}
+        {rejectionMessage && (
+          <div
+            aria-live="polite"
+            className="mb-4 flex items-start justify-between border border-red-800 bg-red-950/20 px-4 py-3 text-xs text-red-400"
+            role="alert"
+          >
+            <span>
+              <span className="font-bold">[!] WARNING: </span>
+              {rejectionMessage}
+            </span>
+            <button
+              aria-label="Dismiss error"
+              className="ml-4 shrink-0 uppercase tracking-wider text-red-600 hover:text-red-400"
+              onClick={() => setRejectionMessage(null)}
+              type="button"
+            >
+              [x]
+            </button>
+          </div>
+        )}
+
+        {/* Controls row */}
+        <div className="mb-6 flex items-center justify-between border border-orange-900 px-4 py-3">
           <UploadButton
             currentCount={samples.length}
             maxCount={MAX_SAMPLES}
             onFilesSelected={handleFilesSelected}
             onRejected={setRejectionMessage}
           />
-          <span className="text-sm text-gray-500">
-            {samples.length}/{MAX_SAMPLES} samples
+          <span className="text-xs uppercase tracking-widest text-orange-800">
+            {samples.length.toString().padStart(2, "0")}/{MAX_SAMPLES} LOADED
           </span>
         </div>
 
-        {rejectionMessage && (
-          <div
-            aria-live="polite"
-            className="mb-4 flex items-start justify-between rounded-lg border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-300"
-            role="alert"
-          >
-            <span>{rejectionMessage}</span>
-            <button
-              aria-label="Dismiss error"
-              className="ml-4 shrink-0 text-red-400 hover:text-red-200"
-              onClick={() => setRejectionMessage(null)}
-              type="button"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
+        {/* Sample bank */}
         <SampleList samples={samples} onRemove={removeSample} />
       </main>
     </div>

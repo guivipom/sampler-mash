@@ -1,6 +1,7 @@
 import { formatDuration } from "../lib/formatDuration";
 
 interface SampleItemProps {
+  index: number;
   name: string;
   duration: number;
   isLoading: boolean;
@@ -8,56 +9,64 @@ interface SampleItemProps {
 }
 
 export function SampleItem({
+  index,
   name,
   duration,
   isLoading,
   onRemove,
 }: SampleItemProps) {
+  const paddedIndex = index.toString().padStart(3, "0");
+
   return (
-    <div className="flex items-center justify-between rounded-lg bg-gray-800 px-4 py-3">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <p
-            className="truncate text-sm font-medium text-gray-100"
-            title={name}
+    <div className="flex items-center gap-2 px-1 py-1 text-xs hover:bg-orange-950/30">
+      {/* Prompt */}
+      <span className="shrink-0 text-orange-600">&gt;</span>
+
+      {/* Index */}
+      <span className="w-8 shrink-0 tabular-nums text-orange-700">
+        {paddedIndex}
+      </span>
+
+      {/* Filename */}
+      <span
+        className="min-w-0 flex-1 truncate text-orange-300"
+        title={name}
+      >
+        {name}
+      </span>
+
+      {/* Dot fill — decorative, aria-hidden */}
+      <span
+        aria-hidden="true"
+        className="shrink-0 overflow-hidden text-orange-900"
+        style={{ width: "6rem", letterSpacing: "0.15em" }}
+      >
+        {"·".repeat(20)}
+      </span>
+
+      {/* Duration / loading */}
+      <span className="w-16 shrink-0 text-right tabular-nums text-orange-600">
+        {isLoading ? (
+          <span
+            aria-label="Loading"
+            className="animate-pulse text-orange-700"
+            role="status"
           >
-            {name}
-          </p>
-        </div>
-        <div className="w-16 shrink-0 text-right">
-          {isLoading ? (
-            <span
-              aria-label="Loading"
-              className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-indigo-400"
-              role="status"
-            />
-          ) : (
-            <span className="text-xs tabular-nums text-gray-400">
-              {formatDuration(duration)}
-            </span>
-          )}
-        </div>
-      </div>
+            [LOADING]
+          </span>
+        ) : (
+          formatDuration(duration)
+        )}
+      </span>
+
+      {/* Remove */}
       <button
         aria-label={`Remove ${name}`}
-        className="ml-4 shrink-0 rounded p-1 text-gray-500 transition-colors hover:bg-gray-700 hover:text-gray-200"
+        className="ml-2 shrink-0 text-orange-800 transition-colors hover:text-red-500"
         onClick={onRemove}
         type="button"
       >
-        <svg
-          aria-hidden="true"
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          viewBox="0 0 24 24"
-        >
-          <path
-            d="M6 18L18 6M6 6l12 12"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        [x]
       </button>
     </div>
   );

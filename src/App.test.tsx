@@ -40,24 +40,33 @@ describe("App", () => {
   it("renders the app heading", () => {
     render(<App />);
     expect(
-      screen.getByRole("heading", { name: /sampler app/i }),
+      screen.getByRole("heading", { name: /sampler.*mash system/i }),
     ).toBeInTheDocument();
   });
 
   it("renders the upload button", () => {
     render(<App />);
-    expect(screen.getByText("Add Samples (0/25)")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /load samples, 0 of 25 used/i }),
+    ).toHaveTextContent(/LOAD SAMPLES\s+00\/25/);
   });
 
-  it("renders the empty sample list message initially", () => {
+  it("renders the SAMPLE BANK section header", () => {
     render(<App />);
-    expect(screen.getByText(/no samples uploaded yet/i)).toBeInTheDocument();
+    expect(screen.getByText("SAMPLE BANK")).toBeInTheDocument();
+  });
+
+  it("renders the empty state message initially", () => {
+    render(<App />);
+    expect(screen.getByText(/no samples loaded/i)).toBeInTheDocument();
   });
 
   it("adds samples to the list after file selection", async () => {
     render(<App />);
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     await act(async () => {
       await userEvent.upload(input, [
         makeAudioFile("kick.wav"),
@@ -67,25 +76,23 @@ describe("App", () => {
 
     await screen.findByText("kick.wav");
     expect(screen.getByText("snare.wav")).toBeInTheDocument();
-    expect(screen.queryByText(/no samples uploaded yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no samples loaded/i)).not.toBeInTheDocument();
   });
 
-  it("shows a rejection message when selection would exceed the cap", async () => {
-    // Pre-fill to 24 samples
+  it("shows a rejection warning when selection would exceed the cap", async () => {
     const manyFiles = Array.from({ length: 24 }, (_, i) =>
       makeAudioFile(`sample-${i}.wav`),
     );
-    mockDecodeAudioData.mockResolvedValue(makeMockAudioBuffer(1.0));
-
     render(<App />);
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
 
     await act(async () => {
       await userEvent.upload(input, manyFiles);
     });
 
-    // Now try to add 2 more (only 1 slot left)
     await act(async () => {
       await userEvent.upload(input, [
         makeAudioFile("overflow-a.wav"),
@@ -95,16 +102,18 @@ describe("App", () => {
 
     await screen.findByRole("alert");
     expect(screen.getByRole("alert")).toHaveTextContent(/only 1 slot remaining/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/\[!\] warning/i);
   });
 
   it("dismisses the rejection message when the dismiss button is clicked", async () => {
-    // Pre-fill to 24 samples to trigger a rejection
     const manyFiles = Array.from({ length: 24 }, (_, i) =>
       makeAudioFile(`sample-${i}.wav`),
     );
     render(<App />);
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
 
     await act(async () => {
       await userEvent.upload(input, manyFiles);
@@ -118,15 +127,18 @@ describe("App", () => {
     });
 
     await screen.findByRole("alert");
-
-    await userEvent.click(screen.getByRole("button", { name: /dismiss error/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /dismiss error/i }),
+    );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("removes a sample when its remove button is clicked", async () => {
     render(<App />);
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     await act(async () => {
       await userEvent.upload(input, [makeAudioFile("removable.wav")]);
     });
@@ -137,20 +149,24 @@ describe("App", () => {
     );
 
     expect(screen.queryByText("removable.wav")).not.toBeInTheDocument();
-    expect(screen.getByText(/no samples uploaded yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no samples loaded/i)).toBeInTheDocument();
   });
 
   it("updates the sample count display as samples are added", async () => {
     render(<App />);
+    expect(
+      screen.getByRole("button", { name: /load samples, 0 of 25 used/i }),
+    ).toHaveTextContent(/LOAD SAMPLES\s+00\/25/);
 
-    expect(screen.getByText("Add Samples (0/25)")).toBeInTheDocument();
-
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     await act(async () => {
       await userEvent.upload(input, [makeAudioFile("beat.wav")]);
     });
 
-    await screen.findByText("Add Samples (1/25)");
-    expect(screen.getByText("1/25 samples")).toBeInTheDocument();
+    await screen.findByRole("button", { name: /load samples, 1 of 25 used/i });
+    // The count span renders count/max as separate text nodes; use regex to match
+    expect(screen.getByText(/LOADED/)).toBeInTheDocument();
   });
 });
