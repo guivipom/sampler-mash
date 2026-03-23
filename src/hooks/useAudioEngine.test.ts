@@ -5,18 +5,42 @@ import { useAudioEngine } from "./useAudioEngine";
 // ---------------------------------------------------------------------------
 // Mock Tone.js — use vi.hoisted so variables are available when vi.mock runs
 // ---------------------------------------------------------------------------
-const { mockDecodeAudioData, mockStart } = vi.hoisted(() => ({
-  mockDecodeAudioData: vi.fn(),
-  mockStart: vi.fn().mockResolvedValue(undefined),
-}));
+const { mockDecodeAudioData, mockStart, mockPlayerStop, mockPlayerDispose, MockPlayer } =
+  vi.hoisted(() => {
+    const mockPlayerStop = vi.fn();
+    const mockPlayerDispose = vi.fn();
+    const mockPlayerStart = vi.fn().mockReturnThis();
+
+    // Must use a real constructor function so `new Tone.Player(...)` works
+    function MockPlayer(this: Record<string, unknown>) {
+      this.stop = mockPlayerStop;
+      this.dispose = mockPlayerDispose;
+      this.start = mockPlayerStart;
+      this.toDestination = function (this: unknown) {
+        return this;
+      };
+    }
+
+    return {
+      mockDecodeAudioData: vi.fn(),
+      mockStart: vi.fn().mockResolvedValue(undefined),
+      mockPlayerStop,
+      mockPlayerDispose,
+      MockPlayer,
+    };
+  });
 
 vi.mock("tone", () => ({
   start: mockStart,
   getContext: () => ({
     decodeAudioData: mockDecodeAudioData,
   }),
+  Player: MockPlayer,
 }));
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 function makeMockAudioBuffer(duration: number = 2.0): AudioBuffer {
   return {
     duration,
@@ -29,9 +53,6 @@ function makeMockAudioBuffer(duration: number = 2.0): AudioBuffer {
   } as unknown as AudioBuffer;
 }
 
-// ---------------------------------------------------------------------------
-// Helper: create a File with an ArrayBuffer payload so FileReader can read it
-// ---------------------------------------------------------------------------
 function makeAudioFile(name: string = "test.wav"): File {
   return new File([new ArrayBuffer(8)], name, { type: "audio/wav" });
 }
@@ -45,15 +66,23 @@ describe("useAudioEngine", () => {
     mockDecodeAudioData.mockResolvedValue(makeMockAudioBuffer(2.0));
   });
 
+  // --- Initial state ---
+
   it("starts with an empty samples array", () => {
     const { result } = renderHook(() => useAudioEngine());
     expect(result.current.samples).toEqual([]);
   });
 
+  it("starts with previewingId as null", () => {
+    const { result } = renderHook(() => useAudioEngine());
+    expect(result.current.previewingId).toBeNull();
+  });
+
+  // --- addFiles: loading state ---
+
   it("immediately adds entries with isLoading=true when addFiles is called", async () => {
     const { result } = renderHook(() => useAudioEngine());
 
-    // Don't resolve decode yet — use a deferred promise
     let resolveDecode!: (buf: AudioBuffer) => void;
     mockDecodeAudioData.mockReturnValue(
       new Promise<AudioBuffer>((res) => {
@@ -71,13 +100,15 @@ describe("useAudioEngine", () => {
       isLoading: true,
       buffer: null,
       duration: 0,
+      error: null,
     });
 
-    // Resolve to clean up
     await act(async () => {
       resolveDecode(makeMockAudioBuffer(2.0));
     });
   });
+
+  // --- addFiles: success ---
 
   it("updates entry with buffer and duration after decode resolves", async () => {
     const buf = makeMockAudioBuffer(3.5);
@@ -89,21 +120,19 @@ describe("useAudioEngine", () => {
       await result.current.addFiles([makeAudioFile("snare.wav")]);
     });
 
-    expect(result.current.samples).toHaveLength(1);
     expect(result.current.samples[0]).toMatchObject({
       name: "snare.wav",
       isLoading: false,
       buffer: buf,
       duration: 3.5,
+      error: null,
     });
   });
 
   it("decodes multiple files in parallel", async () => {
-    const buf1 = makeMockAudioBuffer(1.0);
-    const buf2 = makeMockAudioBuffer(2.0);
     mockDecodeAudioData
-      .mockResolvedValueOnce(buf1)
-      .mockResolvedValueOnce(buf2);
+      .mockResolvedValueOnce(makeMockAudioBuffer(1.0))
+      .mockResolvedValueOnce(makeMockAudioBuffer(2.0));
 
     const { result } = renderHook(() => useAudioEngine());
 
@@ -116,9 +145,20 @@ describe("useAudioEngine", () => {
 
     expect(result.current.samples).toHaveLength(2);
     expect(result.current.samples.every((s) => !s.isLoading)).toBe(true);
+    expect(result.current.samples.every((s) => s.error === null)).toBe(true);
   });
 
-  it("removes a failed-decode entry from state", async () => {
+  it("calls Tone.start() before decoding", async () => {
+    const { result } = renderHook(() => useAudioEngine());
+    await act(async () => {
+      await result.current.addFiles([makeAudioFile("test.wav")]);
+    });
+    expect(mockStart).toHaveBeenCalled();
+  });
+
+  // --- addFiles: error handling ---
+
+  it("marks a failed-decode entry with an error string", async () => {
     mockDecodeAudioData.mockRejectedValue(new Error("decode error"));
 
     const { result } = renderHook(() => useAudioEngine());
@@ -127,13 +167,18 @@ describe("useAudioEngine", () => {
       await result.current.addFiles([makeAudioFile("corrupt.wav")]);
     });
 
-    expect(result.current.samples).toHaveLength(0);
+    expect(result.current.samples).toHaveLength(1);
+    expect(result.current.samples[0]).toMatchObject({
+      name: "corrupt.wav",
+      isLoading: false,
+      buffer: null,
+      error: "DECODE FAILED",
+    });
   });
 
   it("keeps successful entries when one file fails to decode", async () => {
-    const buf = makeMockAudioBuffer(1.0);
     mockDecodeAudioData
-      .mockResolvedValueOnce(buf)
+      .mockResolvedValueOnce(makeMockAudioBuffer(1.0))
       .mockRejectedValueOnce(new Error("bad"));
 
     const { result } = renderHook(() => useAudioEngine());
@@ -145,9 +190,18 @@ describe("useAudioEngine", () => {
       ]);
     });
 
-    expect(result.current.samples).toHaveLength(1);
-    expect(result.current.samples[0].name).toBe("good.wav");
+    expect(result.current.samples).toHaveLength(2);
+    expect(result.current.samples[0]).toMatchObject({
+      name: "good.wav",
+      error: null,
+    });
+    expect(result.current.samples[1]).toMatchObject({
+      name: "bad.wav",
+      error: "DECODE FAILED",
+    });
   });
+
+  // --- removeSample ---
 
   it("removeSample removes the correct sample by id", async () => {
     mockDecodeAudioData
@@ -195,25 +249,110 @@ describe("useAudioEngine", () => {
 
     expect(result.current.samples).toHaveLength(0);
 
-    // Resolve the decode — should be a no-op since entry was removed
     await act(async () => {
       resolveDecode(makeMockAudioBuffer(1.0));
     });
 
     await waitFor(() => {
-      // The entry was removed before decode resolved; because the setSamples
-      // callback filters by id, the resolved value won't re-add it.
       expect(result.current.samples).toHaveLength(0);
     });
   });
 
-  it("calls Tone.start() before decoding", async () => {
+  // --- previewSample ---
+
+  it("sets previewingId when previewSample is called", async () => {
+    const buf = makeMockAudioBuffer(1.0);
+    mockDecodeAudioData.mockResolvedValue(buf);
+
     const { result } = renderHook(() => useAudioEngine());
 
     await act(async () => {
-      await result.current.addFiles([makeAudioFile("test.wav")]);
+      await result.current.addFiles([makeAudioFile("kick.wav")]);
     });
 
-    expect(mockStart).toHaveBeenCalled();
+    const id = result.current.samples[0].id;
+
+    act(() => {
+      result.current.previewSample(id);
+    });
+
+    // previewingId is set to the sample's id
+    expect(result.current.previewingId).toBe(id);
+  });
+
+  it("does nothing when previewSample is called for a sample with no buffer", async () => {
+    mockDecodeAudioData.mockRejectedValue(new Error("bad"));
+
+    const { result } = renderHook(() => useAudioEngine());
+
+    await act(async () => {
+      await result.current.addFiles([makeAudioFile("broken.wav")]);
+    });
+
+    const id = result.current.samples[0].id;
+
+    act(() => {
+      result.current.previewSample(id);
+    });
+
+    // Buffer is null (error state) so previewingId stays null
+    expect(result.current.previewingId).toBeNull();
+  });
+
+  // --- stopPreview ---
+
+  it("stopPreview clears previewingId", async () => {
+    const buf = makeMockAudioBuffer(1.0);
+    mockDecodeAudioData.mockResolvedValue(buf);
+
+    const { result } = renderHook(() => useAudioEngine());
+
+    await act(async () => {
+      await result.current.addFiles([makeAudioFile("kick.wav")]);
+    });
+
+    const id = result.current.samples[0].id;
+
+    act(() => {
+      result.current.previewSample(id);
+    });
+
+    expect(result.current.previewingId).toBe(id);
+
+    act(() => {
+      result.current.stopPreview();
+    });
+
+    expect(result.current.previewingId).toBeNull();
+    // The underlying Tone.Player's stop method should have been called
+    expect(mockPlayerStop).toHaveBeenCalled();
+  });
+
+  it("removeSample stops preview when removing the previewing sample", async () => {
+    const buf = makeMockAudioBuffer(1.0);
+    mockDecodeAudioData.mockResolvedValue(buf);
+
+    const { result } = renderHook(() => useAudioEngine());
+
+    await act(async () => {
+      await result.current.addFiles([makeAudioFile("kick.wav")]);
+    });
+
+    const id = result.current.samples[0].id;
+
+    act(() => {
+      result.current.previewSample(id);
+    });
+
+    expect(result.current.previewingId).toBe(id);
+
+    act(() => {
+      result.current.removeSample(id);
+    });
+
+    expect(result.current.previewingId).toBeNull();
+    expect(result.current.samples).toHaveLength(0);
+    // The underlying Tone.Player's dispose method should have been called
+    expect(mockPlayerDispose).toHaveBeenCalled();
   });
 });

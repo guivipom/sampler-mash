@@ -4,14 +4,13 @@ import { describe, it, expect, vi } from "vitest";
 import { SampleList } from "./SampleList";
 
 const makeSample = (
-  overrides: Partial<
-    Parameters<typeof SampleList>[0]["samples"][0]
-  > = {},
+  overrides: Partial<Parameters<typeof SampleList>[0]["samples"][0]> = {},
 ) => ({
   id: "sample-1",
   name: "kick.wav",
   duration: 1.0,
   isLoading: false,
+  error: null,
   ...overrides,
 });
 
@@ -65,9 +64,7 @@ describe("SampleList", () => {
     render(<SampleList samples={samples} onRemove={onRemove} />);
 
     const items = screen.getAllByRole("listitem");
-    const bassItem = items.find((item) =>
-      within(item).queryByText("bass.wav"),
-    );
+    const bassItem = items.find((item) => within(item).queryByText("bass.wav"));
     await userEvent.click(
       within(bassItem!).getByRole("button", { name: /remove bass\.wav/i }),
     );
@@ -82,9 +79,17 @@ describe("SampleList", () => {
       makeSample({ id: "2", name: "ready.wav", isLoading: false }),
     ];
     render(<SampleList samples={samples} onRemove={vi.fn()} />);
-    expect(
-      screen.getByRole("status", { name: /loading/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: /loading/i })).toBeInTheDocument();
+    expect(screen.getByText("0:01.0")).toBeInTheDocument();
+  });
+
+  it("passes the error state down to the correct sample item", () => {
+    const samples = [
+      makeSample({ id: "1", name: "broken.wav", error: "DECODE FAILED" }),
+      makeSample({ id: "2", name: "good.wav" }),
+    ];
+    render(<SampleList samples={samples} onRemove={vi.fn()} />);
+    expect(screen.getByRole("alert", { name: /decode failed/i })).toBeInTheDocument();
     expect(screen.getByText("0:01.0")).toBeInTheDocument();
   });
 });

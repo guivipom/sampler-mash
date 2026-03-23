@@ -5,6 +5,7 @@ interface SampleListEntry {
   name: string;
   duration: number;
   isLoading: boolean;
+  error: string | null;
 }
 
 interface SampleListProps {
@@ -35,6 +36,7 @@ export function SampleList({ samples, onRemove }: SampleListProps) {
               <SampleItem
                 index={i + 1}
                 duration={sample.duration}
+                error={sample.error}
                 isLoading={sample.isLoading}
                 name={sample.name}
                 onRemove={() => onRemove(sample.id)}

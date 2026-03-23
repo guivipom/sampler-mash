@@ -9,6 +9,7 @@ describe("SampleItem", () => {
     name: "kick-drum.wav",
     duration: 2.5,
     isLoading: false,
+    error: null,
     onRemove: vi.fn(),
   };
 
@@ -27,7 +28,7 @@ describe("SampleItem", () => {
     expect(screen.getByText("100")).toBeInTheDocument();
   });
 
-  it("renders the formatted duration when not loading", () => {
+  it("renders the formatted duration when not loading and no error", () => {
     render(<SampleItem {...defaultProps} duration={65.3} />);
     expect(screen.getByText("1:05.3")).toBeInTheDocument();
   });
@@ -37,6 +38,19 @@ describe("SampleItem", () => {
     expect(screen.queryByText("0:02.5")).not.toBeInTheDocument();
     expect(screen.getByRole("status", { name: /loading/i })).toBeInTheDocument();
     expect(screen.getByText("[LOADING]")).toBeInTheDocument();
+  });
+
+  it("shows [ERR] and an alert role when there is an error", () => {
+    render(<SampleItem {...defaultProps} error="DECODE FAILED" />);
+    expect(screen.queryByText("0:02.5")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert", { name: /decode failed/i })).toBeInTheDocument();
+    expect(screen.getByText("[ERR]")).toBeInTheDocument();
+  });
+
+  it("does not show error when loading (loading takes precedence)", () => {
+    render(<SampleItem {...defaultProps} isLoading={true} error="DECODE FAILED" />);
+    expect(screen.getByText("[LOADING]")).toBeInTheDocument();
+    expect(screen.queryByText("[ERR]")).not.toBeInTheDocument();
   });
 
   it("calls onRemove when the remove button is clicked", async () => {
@@ -59,13 +73,22 @@ describe("SampleItem", () => {
     expect(onRemove).toHaveBeenCalledTimes(1);
   });
 
+  it("remove button is accessible when in error state", async () => {
+    const onRemove = vi.fn();
+    render(
+      <SampleItem {...defaultProps} error="DECODE FAILED" onRemove={onRemove} />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /remove kick-drum\.wav/i }),
+    );
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the full name as a tooltip via title attribute", () => {
     render(
       <SampleItem {...defaultProps} name="very-long-sample-name.wav" />,
     );
-    expect(
-      screen.getByTitle("very-long-sample-name.wav"),
-    ).toBeInTheDocument();
+    expect(screen.getByTitle("very-long-sample-name.wav")).toBeInTheDocument();
   });
 
   it("renders the terminal prompt character", () => {

@@ -13,6 +13,12 @@ const { mockDecodeAudioData } = vi.hoisted(() => ({
 vi.mock("tone", () => ({
   start: vi.fn().mockResolvedValue(undefined),
   getContext: () => ({ decodeAudioData: mockDecodeAudioData }),
+  Player: vi.fn().mockImplementation(() => ({
+    toDestination: vi.fn().mockReturnThis(),
+    start: vi.fn().mockReturnThis(),
+    stop: vi.fn(),
+    dispose: vi.fn(),
+  })),
 }));
 
 function makeMockAudioBuffer(duration: number = 1.0): AudioBuffer {
@@ -150,6 +156,22 @@ describe("App", () => {
 
     expect(screen.queryByText("removable.wav")).not.toBeInTheDocument();
     expect(screen.getByText(/no samples loaded/i)).toBeInTheDocument();
+  });
+
+  it("shows [ERR] in the sample list when a file fails to decode", async () => {
+    mockDecodeAudioData.mockRejectedValue(new Error("bad file"));
+    render(<App />);
+
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, [makeAudioFile("corrupt.wav")]);
+    });
+
+    await screen.findByText("corrupt.wav");
+    expect(screen.getByRole("alert", { name: /decode failed/i })).toBeInTheDocument();
+    expect(screen.getByText("[ERR]")).toBeInTheDocument();
   });
 
   it("updates the sample count display as samples are added", async () => {

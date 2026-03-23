@@ -5,6 +5,7 @@ interface SampleItemProps {
   name: string;
   duration: number;
   isLoading: boolean;
+  error: string | null;
   onRemove: () => void;
 }
 
@@ -13,14 +14,45 @@ export function SampleItem({
   name,
   duration,
   isLoading,
+  error,
   onRemove,
 }: SampleItemProps) {
   const paddedIndex = index.toString().padStart(3, "0");
 
+  function renderStatus() {
+    if (isLoading) {
+      return (
+        <span
+          aria-label="Loading"
+          className="animate-pulse text-orange-700"
+          role="status"
+        >
+          [LOADING]
+        </span>
+      );
+    }
+    if (error) {
+      return (
+        <span aria-label={error} className="text-red-600" role="alert">
+          [ERR]
+        </span>
+      );
+    }
+    return (
+      <span className="tabular-nums text-orange-600">
+        {formatDuration(duration)}
+      </span>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-2 px-1 py-1 text-xs hover:bg-orange-950/30">
+    <div
+      className={`flex items-center gap-2 px-1 py-1 text-xs hover:bg-orange-950/30 ${error ? "opacity-60" : ""}`}
+    >
       {/* Prompt */}
-      <span className="shrink-0 text-orange-600">&gt;</span>
+      <span className={`shrink-0 ${error ? "text-red-800" : "text-orange-600"}`}>
+        &gt;
+      </span>
 
       {/* Index */}
       <span className="w-8 shrink-0 tabular-nums text-orange-700">
@@ -28,10 +60,7 @@ export function SampleItem({
       </span>
 
       {/* Filename */}
-      <span
-        className="min-w-0 flex-1 truncate text-orange-300"
-        title={name}
-      >
+      <span className="min-w-0 flex-1 truncate text-orange-300" title={name}>
         {name}
       </span>
 
@@ -44,20 +73,8 @@ export function SampleItem({
         {"·".repeat(20)}
       </span>
 
-      {/* Duration / loading */}
-      <span className="w-16 shrink-0 text-right tabular-nums text-orange-600">
-        {isLoading ? (
-          <span
-            aria-label="Loading"
-            className="animate-pulse text-orange-700"
-            role="status"
-          >
-            [LOADING]
-          </span>
-        ) : (
-          formatDuration(duration)
-        )}
-      </span>
+      {/* Status: duration / loading / error */}
+      <span className="w-16 shrink-0 text-right">{renderStatus()}</span>
 
       {/* Remove */}
       <button
