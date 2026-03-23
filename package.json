@@ -9,8 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "tsc": "tsc -b"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "audiobuffer-to-wav": "^1.0.0",
