@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import * as Tone from "tone";
+import type { RawAudioData } from "../types";
+import { createMashBuffer } from "../lib/mashPlayer";
 
 export interface SampleEntry {
   id: string;
@@ -17,6 +19,9 @@ interface UseAudioEngineReturn {
   previewSample: (id: string) => void;
   stopPreview: () => void;
   previewingId: string | null;
+  playMash: () => Promise<void>;
+  isRendering: boolean;
+  mashBuffer: AudioBuffer | null;
 }
 
 function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
@@ -36,6 +41,8 @@ function generateId(): string {
 export function useAudioEngine(): UseAudioEngineReturn {
   const [samples, setSamples] = useState<SampleEntry[]>([]);
   const [previewingId, setPreviewingId] = useState<string | null>(null);
+  const [isRendering, setIsRendering] = useState(false);
+  const [mashBuffer, setMashBuffer] = useState<AudioBuffer | null>(null);
   const playerRef = useRef<Tone.Player | null>(null);
 
   const addFiles = useCallback(async (files: File[]): Promise<void> => {
@@ -43,6 +50,9 @@ export function useAudioEngine(): UseAudioEngineReturn {
       id: generateId(),
       file,
     }));
+
+    // Invalidate any cached mash when samples change
+    setMashBuffer(null);
 
     // Immediately add all entries in loading state
     setSamples((prev) => [
@@ -105,6 +115,8 @@ export function useAudioEngine(): UseAudioEngineReturn {
         playerRef.current = null;
         setPreviewingId(null);
       }
+      // Invalidate cached mash when samples change
+      setMashBuffer(null);
       setSamples((prev) => prev.filter((s) => s.id !== id));
     },
     [previewingId],
@@ -149,6 +161,54 @@ export function useAudioEngine(): UseAudioEngineReturn {
     [samples, stopPreview],
   );
 
+  const playMash = useCallback(async (): Promise<void> => {
+    const readySamples = samples.filter((s) => s.buffer !== null && s.error === null);
+    if (readySamples.length === 0) return;
+
+    setIsRendering(true);
+    try {
+      await Tone.start();
+
+      // Build RawAudioData from AudioBuffer for each ready sample
+      const rawBuffers: RawAudioData[] = readySamples.map((s) => {
+        const buf = s.buffer!;
+        const channelData: Float32Array[] = [];
+        for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+          channelData.push(new Float32Array(buf.getChannelData(ch)));
+        }
+        return {
+          channelData,
+          sampleRate: buf.sampleRate,
+          numberOfChannels: buf.numberOfChannels,
+          length: buf.length,
+        };
+      });
+
+      const ctx = Tone.getContext().rawContext as BaseAudioContext;
+      const rendered = await createMashBuffer(rawBuffers, ctx);
+      if (!rendered) return;
+
+      setMashBuffer(rendered);
+
+      // Stop any active preview before playing the mash
+      stopPreview();
+
+      const player = new Tone.Player(rendered).toDestination();
+      playerRef.current = player;
+      player.start();
+
+      // Auto-cleanup when mash playback ends
+      const durationMs = rendered.duration * 1000;
+      setTimeout(() => {
+        if (playerRef.current === player) {
+          playerRef.current = null;
+        }
+      }, durationMs + 100);
+    } finally {
+      setIsRendering(false);
+    }
+  }, [samples, stopPreview]);
+
   return {
     samples,
     addFiles,
@@ -156,5 +216,8 @@ export function useAudioEngine(): UseAudioEngineReturn {
     previewSample,
     stopPreview,
     previewingId,
+    playMash,
+    isRendering,
+    mashBuffer,
   };
 }

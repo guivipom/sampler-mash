@@ -30,10 +30,20 @@ const { mockDecodeAudioData, mockStart, mockPlayerStop, mockPlayerDispose, MockP
     };
   });
 
+// Mock createMashBuffer so useAudioEngine tests don't depend on the full pipeline
+const { mockCreateMashBuffer } = vi.hoisted(() => ({
+  mockCreateMashBuffer: vi.fn(),
+}));
+
+vi.mock("../lib/mashPlayer", () => ({
+  createMashBuffer: mockCreateMashBuffer,
+}));
+
 vi.mock("tone", () => ({
   start: mockStart,
   getContext: () => ({
     decodeAudioData: mockDecodeAudioData,
+    rawContext: {},
   }),
   Player: MockPlayer,
 }));
@@ -326,6 +336,106 @@ describe("useAudioEngine", () => {
     expect(result.current.previewingId).toBeNull();
     // The underlying Tone.Player's stop method should have been called
     expect(mockPlayerStop).toHaveBeenCalled();
+  });
+
+  // --- playMash ---
+
+  it("starts with isRendering=false and mashBuffer=null", () => {
+    const { result } = renderHook(() => useAudioEngine());
+    expect(result.current.isRendering).toBe(false);
+    expect(result.current.mashBuffer).toBeNull();
+  });
+
+  it("playMash does nothing when there are no ready samples", async () => {
+    const { result } = renderHook(() => useAudioEngine());
+    await act(async () => {
+      await result.current.playMash();
+    });
+    expect(mockCreateMashBuffer).not.toHaveBeenCalled();
+  });
+
+  it("playMash sets isRendering to false after completion", async () => {
+    const buf = makeMockAudioBuffer(2.0);
+    mockDecodeAudioData.mockResolvedValue(buf);
+    mockCreateMashBuffer.mockResolvedValue(buf);
+
+    const { result } = renderHook(() => useAudioEngine());
+
+    await act(async () => {
+      await result.current.addFiles([makeAudioFile("kick.wav")]);
+    });
+
+    await act(async () => {
+      await result.current.playMash();
+    });
+
+    expect(result.current.isRendering).toBe(false);
+  });
+
+  it("playMash caches the rendered AudioBuffer in mashBuffer", async () => {
+    const buf = makeMockAudioBuffer(2.0);
+    mockDecodeAudioData.mockResolvedValue(buf);
+    mockCreateMashBuffer.mockResolvedValue(buf);
+
+    const { result } = renderHook(() => useAudioEngine());
+
+    await act(async () => {
+      await result.current.addFiles([makeAudioFile("kick.wav")]);
+    });
+
+    await act(async () => {
+      await result.current.playMash();
+    });
+
+    expect(result.current.mashBuffer).toBe(buf);
+  });
+
+  it("mashBuffer is invalidated when a sample is added", async () => {
+    const buf = makeMockAudioBuffer(2.0);
+    mockDecodeAudioData.mockResolvedValue(buf);
+    mockCreateMashBuffer.mockResolvedValue(buf);
+
+    const { result } = renderHook(() => useAudioEngine());
+
+    await act(async () => {
+      await result.current.addFiles([makeAudioFile("kick.wav")]);
+    });
+
+    await act(async () => {
+      await result.current.playMash();
+    });
+
+    expect(result.current.mashBuffer).toBe(buf);
+
+    await act(async () => {
+      await result.current.addFiles([makeAudioFile("snare.wav")]);
+    });
+
+    expect(result.current.mashBuffer).toBeNull();
+  });
+
+  it("mashBuffer is invalidated when a sample is removed", async () => {
+    const buf = makeMockAudioBuffer(2.0);
+    mockDecodeAudioData.mockResolvedValue(buf);
+    mockCreateMashBuffer.mockResolvedValue(buf);
+
+    const { result } = renderHook(() => useAudioEngine());
+
+    await act(async () => {
+      await result.current.addFiles([makeAudioFile("kick.wav")]);
+    });
+
+    await act(async () => {
+      await result.current.playMash();
+    });
+
+    const id = result.current.samples[0].id;
+
+    act(() => {
+      result.current.removeSample(id);
+    });
+
+    expect(result.current.mashBuffer).toBeNull();
   });
 
   it("removeSample stops preview when removing the previewing sample", async () => {
