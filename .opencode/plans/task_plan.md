@@ -1,5 +1,22 @@
 # Sampler App — Project Plan
 
+## Session Notes (last updated 2026-03-25)
+
+### Key discoveries
+- **`import type` is required** for all type-only imports from `types.ts` in this Vite project — using `import { RawAudioData }` instead of `import type { RawAudioData }` causes a runtime `SyntaxError` in the browser.
+- **TypeScript strict generics on CI**: `AudioBuffer.copyToChannel()` expects `Float32Array<ArrayBuffer>` but `getChannelData()` returns `Float32Array<ArrayBufferLike>`. Fix: wrap `getChannelData()` result in `new Float32Array(...)`, and cast channel data with `as Float32Array<ArrayBuffer>` at the `copyToChannel` call site.
+- The original slicer/interleaver approach (sequential chunks) was replaced with simultaneous-layer mixing. `slicer.ts` and `interleaver.ts` were never built and are no longer needed.
+- **Tone.js mock pattern**: use `vi.hoisted` for mock setup; `Tone.Player` mock must be a real constructor function (not an arrow function).
+- `useAudioEngine` tests also mock `../lib/mashPlayer` via `vi.mock` so hook tests don't depend on the full pipeline.
+
+### Current state
+- Steps 1–8 complete and merged.
+- **113 tests** across 10 files, all passing.
+- Next step: **Step 9** — `src/components/PlayerControls.tsx`.
+- Repo: `github.com/guivipom/sampler-mash`
+
+---
+
 ## What it does
 
 Users upload audio samples (MP3, WAV, OGG) through a file picker. The app randomly selects up to 4 of those samples, optionally reverses each one (50% chance), trims any longer than 10 seconds to 10 seconds, mixes them as simultaneous layers (all playing at once), and plays back the result. Users can preview individual samples, play the mash, and download the result as a WAV file.
@@ -117,7 +134,7 @@ src/
 
 ---
 
-### Step 5 — Sample Processor ⬜
+### Step 5 — Sample Processor ✅
 `src/lib/sampleProcessor.ts`
 
 Pure function — no Tone.js dependency, operates on `RawAudioData`:
@@ -145,7 +162,7 @@ function processForMash(buffers: RawAudioData[]): RawAudioData[]
 
 ---
 
-### Step 6 — Mash Renderer ⬜
+### Step 6 — Mash Renderer ✅
 `src/lib/mashRenderer.ts`
 
 Pure function — no Tone.js dependency:
@@ -172,7 +189,7 @@ function renderMash(buffers: RawAudioData[]): RawAudioData
 
 ---
 
-### Step 7 — Mash Playback Pipeline ⬜
+### Step 7 — Mash Playback Pipeline ✅
 `src/lib/mashPlayer.ts`
 
 ```ts
@@ -198,7 +215,7 @@ async function createMashBuffer(buffers: RawAudioData[]): Promise<AudioBuffer>
 
 ---
 
-### Step 8 — WAV export ⬜
+### Step 8 — WAV export ✅
 `src/lib/wavExporter.ts`
 
 ```ts
@@ -303,7 +320,7 @@ const { MockPlayer } = vi.hoisted(() => {
 | 5 — Sample Processor | ~10 | ~80 |
 | 6 — Mash Renderer | ~8 | ~88 |
 | 7 — Mash playback | ~5 | ~93 |
-| 8 — WAV export | ~4 | ~94 |
+| 8 — WAV export | 6 | 113 |
 | 9 — PlayerControls | ~6 | ~100 |
 | 10 — Integration | ~5 | ~105 |
 
