@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import * as Tone from "tone";
 import type { RawAudioData } from "../types";
 import { createMashBuffer } from "../lib/mashPlayer";
+import { exportWav } from "../lib/wavExporter";
 
 export interface SampleEntry {
   id: string;
@@ -20,6 +21,8 @@ interface UseAudioEngineReturn {
   stopPreview: () => void;
   previewingId: string | null;
   playMash: () => Promise<void>;
+  generateMash: () => Promise<void>;
+  downloadMash: () => void;
   isRendering: boolean;
   mashBuffer: AudioBuffer | null;
 }
@@ -209,6 +212,47 @@ export function useAudioEngine(): UseAudioEngineReturn {
     }
   }, [samples, stopPreview]);
 
+  // Renders a new randomised mash and caches the resulting AudioBuffer.
+  // Does not auto-play — playback is left to the MashWaveform component.
+  const generateMash = useCallback(async (): Promise<void> => {
+    const readySamples = samples.filter((s) => s.buffer !== null && s.error === null);
+    if (readySamples.length === 0) return;
+
+    setIsRendering(true);
+    try {
+      await Tone.start();
+
+      const rawBuffers: RawAudioData[] = readySamples.map((s) => {
+        const buf = s.buffer!;
+        const channelData: Float32Array[] = [];
+        for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+          channelData.push(new Float32Array(buf.getChannelData(ch)));
+        }
+        return {
+          channelData,
+          sampleRate: buf.sampleRate,
+          numberOfChannels: buf.numberOfChannels,
+          length: buf.length,
+        };
+      });
+
+      const ctx = Tone.getContext().rawContext as BaseAudioContext;
+      const rendered = await createMashBuffer(rawBuffers, ctx);
+      if (!rendered) return;
+
+      setMashBuffer(rendered);
+    } finally {
+      setIsRendering(false);
+    }
+  }, [samples]);
+
+  // Triggers a WAV download of the cached mash buffer, if one exists.
+  const downloadMash = useCallback((): void => {
+    if (mashBuffer) {
+      exportWav(mashBuffer, "mash.wav");
+    }
+  }, [mashBuffer]);
+
   return {
     samples,
     addFiles,
@@ -217,6 +261,8 @@ export function useAudioEngine(): UseAudioEngineReturn {
     stopPreview,
     previewingId,
     playMash,
+    generateMash,
+    downloadMash,
     isRendering,
     mashBuffer,
   };

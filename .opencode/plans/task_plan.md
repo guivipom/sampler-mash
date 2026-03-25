@@ -1,5 +1,22 @@
 # Sampler App — Project Plan
 
+## Session Notes (last updated 2026-03-25)
+
+### Key discoveries
+- **`import type` is required** for all type-only imports from `types.ts` in this Vite project — using `import { RawAudioData }` instead of `import type { RawAudioData }` causes a runtime `SyntaxError` in the browser.
+- **TypeScript strict generics on CI**: `AudioBuffer.copyToChannel()` expects `Float32Array<ArrayBuffer>` but `getChannelData()` returns `Float32Array<ArrayBufferLike>`. Fix: wrap `getChannelData()` result in `new Float32Array(...)`, and cast channel data with `as Float32Array<ArrayBuffer>` at the `copyToChannel` call site.
+- The original slicer/interleaver approach (sequential chunks) was replaced with simultaneous-layer mixing. `slicer.ts` and `interleaver.ts` were never built and are no longer needed.
+- **Tone.js mock pattern**: use `vi.hoisted` for mock setup; `Tone.Player` mock must be a real constructor function (not an arrow function).
+- `useAudioEngine` tests also mock `../lib/mashPlayer` via `vi.mock` so hook tests don't depend on the full pipeline.
+
+### Current state
+- Steps 1–11 complete.
+- **128 tests** across 12 files, all passing.
+- App is fully wired: generate mash → waveform display → download WAV.
+- Repo: `github.com/guivipom/sampler-mash`
+
+---
+
 ## What it does
 
 Users upload audio samples (MP3, WAV, OGG) through a file picker. The app randomly selects up to 4 of those samples, optionally reverses each one (50% chance), trims any longer than 10 seconds to 10 seconds, mixes them as simultaneous layers (all playing at once), and plays back the result. Users can preview individual samples, play the mash, and download the result as a WAV file.
@@ -15,6 +32,7 @@ Users upload audio samples (MP3, WAV, OGG) through a file picker. The app random
 | Styling | Tailwind CSS v4 | Utility-first, Vite-native plugin |
 | Audio engine | Tone.js | High-level Web Audio API abstraction, `ToneAudioBuffer.slice()`, `Tone.Offline()` |
 | WAV export | audiobuffer-to-wav | Converts `AudioBuffer` to WAV `ArrayBuffer` |
+| Waveform display | WaveSurfer.js | Canvas-based waveform renderer from an audio URL |
 | Testing | Vitest + React Testing Library + jsdom | Fast, Vite-native, component + hook testing |
 
 ---
@@ -38,7 +56,8 @@ src/
 │   ├── UploadButton.tsx        # File picker, cap enforcement, MIME filtering
 │   ├── SampleList.tsx          # List wrapper with section header + empty state
 │   ├── SampleItem.tsx          # Terminal-style row: index, name, duration, preview, remove
-│   └── PlayerControls.tsx      # Play mash, download WAV buttons (step 9)
+│   ├── MashControls.tsx        # Generate mash button + rendering indicator (step 9)
+│   └── MashWaveform.tsx        # WaveSurfer waveform + play/stop + download (step 10)
 ├── hooks/
 │   └── useAudioEngine.ts       # Core hook: samples state, addFiles, removeSample,
 │                               #            previewSample, stopPreview, previewingId
@@ -117,7 +136,7 @@ src/
 
 ---
 
-### Step 5 — Sample Processor ⬜
+### Step 5 — Sample Processor ✅
 `src/lib/sampleProcessor.ts`
 
 Pure function — no Tone.js dependency, operates on `RawAudioData`:
@@ -145,7 +164,7 @@ function processForMash(buffers: RawAudioData[]): RawAudioData[]
 
 ---
 
-### Step 6 — Mash Renderer ⬜
+### Step 6 — Mash Renderer ✅
 `src/lib/mashRenderer.ts`
 
 Pure function — no Tone.js dependency:
@@ -172,7 +191,7 @@ function renderMash(buffers: RawAudioData[]): RawAudioData
 
 ---
 
-### Step 7 — Mash Playback Pipeline ⬜
+### Step 7 — Mash Playback Pipeline ✅
 `src/lib/mashPlayer.ts`
 
 ```ts
@@ -198,7 +217,7 @@ async function createMashBuffer(buffers: RawAudioData[]): Promise<AudioBuffer>
 
 ---
 
-### Step 8 — WAV export ⬜
+### Step 8 — WAV export ✅
 `src/lib/wavExporter.ts`
 
 ```ts
@@ -218,49 +237,93 @@ function exportWav(buffer: AudioBuffer, filename?: string): void
 
 ---
 
-### Step 9 — PlayerControls component ⬜
-`src/components/PlayerControls.tsx`
+### Step 9 — MashControls component ✅
+`src/components/MashControls.tsx`
 
 ```
---- CONTROLS ─────────────────────────── ---
-[ PLAY MASH ]    [ DOWNLOAD WAV ]    [RENDERING...]
+--- MASH ENGINE ────────────────────────── ---
+[ GENERATE MASH ]        [RENDERING...]
 ```
 
 Props:
 ```ts
-interface PlayerControlsProps {
+interface MashControlsProps {
   hasReadySamples: boolean;
   isRendering: boolean;
-  onPlayMash: () => void;
+  onGenerate: () => void;
+}
+```
+
+- `[ GENERATE MASH ]` — disabled when no ready samples or rendering; every click generates a new randomised mash
+- `[RENDERING...]` — pulsing status shown while the pipeline is running
+- Terminal styling consistent with the rest of the UI
+
+**Tests:** ~5
+- Button disabled when no ready samples
+- Button disabled while rendering
+- Rendering indicator visible while rendering
+- Calls `onGenerate` on click
+- Not disabled when samples ready and not rendering
+
+---
+
+### Step 10 — MashWaveform component ✅
+`src/components/MashWaveform.tsx`
+
+Renders the waveform of the generated mash using **WaveSurfer.js**. Displays only the final mixed-down `AudioBuffer`.
+
+```
+--- WAVEFORM ────────────────────────────── ---
+[                 waveform here               ]
+[ PLAY ]   [ DOWNLOAD WAV ]
+```
+
+Props:
+```ts
+interface MashWaveformProps {
+  mashBuffer: AudioBuffer | null;
+  isRendering: boolean;
   onDownload: () => void;
 }
 ```
 
-- `[ PLAY MASH ]` — disabled when no ready samples or rendering
-- `[ DOWNLOAD WAV ]` — disabled when no ready samples or rendering
-- Shows `[RENDERING...]` pulsing status during offline render
-- Terminal styling consistent with the rest of the UI
+- Empty state when `mashBuffer` is null: shows `> NO MASH GENERATED_`
+- When `mashBuffer` changes, converts to WAV Blob via `audiobuffer-to-wav` → object URL, loads into WaveSurfer
+- `[ PLAY ]` / `[ STOP ]` toggle using WaveSurfer's internal player
+- `[ DOWNLOAD WAV ]` calls `onDownload`
+- Amber waveform on black background, terminal styling
+- Cleans up WaveSurfer instance and object URL on unmount / buffer change
 
 **Tests:** ~6
-- Buttons disabled when no ready samples
-- Buttons disabled while rendering
-- Shows rendering indicator
-- Calls correct handlers on click
+- Empty state renders when no buffer
+- Waveform container renders when buffer is present
+- Download button calls handler
+- Play/stop toggle works
+- Disabled while rendering
 
 ---
 
-### Step 10 — Wire everything together ⬜
-`App.tsx` final wiring:
+### Step 11 — Wire everything into App.tsx ✅
+`src/App.tsx` + `src/hooks/useAudioEngine.ts`
 
-- `useAudioEngine` extended with `playMash`, `downloadMash`, `isRendering`
-- `PlayerControls` added below the sample list
+`useAudioEngine` extended with:
+- `generateMash(): Promise<void>` — runs `createMashBuffer`, caches as `mashBuffer`, sets `isRendering`
+- `downloadMash(): void` — calls `exportWav(mashBuffer)` when buffer is available
+- `mashBuffer: AudioBuffer | null` — exposed in return value (already exists internally)
+- `isRendering: boolean` — already exists internally
+
+`App.tsx` wired up:
+- `MashControls` placed below the sample list
+- `MashWaveform` placed below `MashControls`
 - `hasReadySamples` = at least one sample with `buffer !== null` and `error === null`
-- Mash buffer invalidated when samples change (add/remove)
+- `mashBuffer` invalidated when samples change (add/remove)
 
-`App.test.tsx` integration tests:
-- Play mash button is disabled with no samples
-- Play mash button is enabled with at least one loaded sample
-- Download button triggers WAV export
+`App.test.tsx` integration tests (~5):
+- Generate button disabled with no samples
+- Generate button enabled with at least one loaded sample
+- Waveform section appears after generation
+- Download calls exporter
+- `mashBuffer` reset when a sample is removed
 
 ---
 
@@ -303,9 +366,10 @@ const { MockPlayer } = vi.hoisted(() => {
 | 5 — Sample Processor | ~10 | ~80 |
 | 6 — Mash Renderer | ~8 | ~88 |
 | 7 — Mash playback | ~5 | ~93 |
-| 8 — WAV export | ~4 | ~94 |
-| 9 — PlayerControls | ~6 | ~100 |
-| 10 — Integration | ~5 | ~105 |
+| 8 — WAV export | 6 | 113 |
+| 9 — MashControls | ~5 | ~118 |
+| 10 — MashWaveform | ~6 | ~124 |
+| 11 — Wire App.tsx | ~5 | ~129 |
 
 ---
 

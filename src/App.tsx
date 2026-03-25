@@ -1,12 +1,27 @@
 import { useState, useEffect } from "react";
 import { UploadButton, MAX_SAMPLES } from "./components/UploadButton";
 import { SampleList } from "./components/SampleList";
+import { MashControls } from "./components/MashControls";
+import { MashWaveform } from "./components/MashWaveform";
 import { useAudioEngine } from "./hooks/useAudioEngine";
 
 const REJECTION_DISPLAY_MS = 5000;
 
 function App() {
-  const { samples, addFiles, removeSample, previewSample, stopPreview, previewingId } = useAudioEngine();
+  const {
+    samples,
+    addFiles,
+    removeSample,
+    previewSample,
+    stopPreview,
+    previewingId,
+    generateMash,
+    downloadMash,
+    isRendering,
+    mashBuffer,
+  } = useAudioEngine();
+
+  const hasReadySamples = samples.some((s) => s.buffer !== null && s.error === null);
   const [rejectionMessage, setRejectionMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -94,6 +109,24 @@ function App() {
           }
           onRemove={removeSample}
         />
+
+        {/* Mash engine controls */}
+        <div className="mt-6">
+          <MashControls
+            hasReadySamples={hasReadySamples}
+            isRendering={isRendering}
+            onGenerate={() => void generateMash()}
+          />
+        </div>
+
+        {/* Waveform display + playback + download */}
+        <div className="mt-4">
+          <MashWaveform
+            mashBuffer={mashBuffer}
+            isRendering={isRendering}
+            onDownload={downloadMash}
+          />
+        </div>
       </main>
     </div>
   );
