@@ -60,9 +60,7 @@ beforeEach(() => {
 
   vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
     if (tag === 'a') return mockAnchor as unknown as HTMLElement;
-    return document.createElement.wrappedFn
-      ? document.createElement.wrappedFn(tag)
-      : (null as unknown as HTMLElement);
+    throw new Error(`Unexpected createElement call: ${tag}`);
   });
 
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url');
@@ -78,9 +76,8 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('exportWav', () => {
-  it('produces a Blob with audio/wav MIME type', () => {
+  it('produces a Blob with audio/wav MIME type', async () => {
     const capturedBlobs: Blob[] = [];
-    const originalCreateObjectURL = URL.createObjectURL;
     vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
       capturedBlobs.push(blob as Blob);
       return 'blob:mock-url';
@@ -91,9 +88,6 @@ describe('exportWav', () => {
 
     expect(capturedBlobs).toHaveLength(1);
     expect(capturedBlobs[0].type).toBe('audio/wav');
-
-    // Restore after this test's override
-    URL.createObjectURL = originalCreateObjectURL;
   });
 
   it('WAV header contains correct sample rate, bit depth, and channel count (mono)', async () => {
